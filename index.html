@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HSO Pro - Liquid Glass Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: { 
+                        primary: '#6366f1', 
+                        glass: {
+                            light: 'rgba(255, 255, 255, 0.65)',
+                            dark: 'rgba(15, 23, 42, 0.65)',
+                            border: 'rgba(255, 255, 255, 0.2)'
+                        }
+                    },
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    boxShadow: {
+                        'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+                        'glow': '0 0 15px rgba(99, 102, 241, 0.5)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; overflow: hidden; user-select: none; transition: background 0.5s ease; }
+        
+        /* Dynamic Liquid Background */
+        .liquid-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+            background: radial-gradient(circle at 10% 20%, rgb(239, 246, 255) 0%, rgb(219, 228, 255) 90%);
+            transition: background 0.5s;
+        }
+        .dark .liquid-bg {
+            background: radial-gradient(circle at 50% 50%, #0f172a 0%, #1e1b4b 100%);
+        }
+        
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+            transition: all 0.3s ease;
+        }
+        .light .glass-panel { background: rgba(255, 255, 255, 0.7); }
+        .dark .glass-panel { 
+            background: rgba(30, 41, 59, 0.7); 
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+        }
+
+        /* Tooltip & Cursors */
+        .tooltip {
+            position: fixed; z-index: 50; padding: 8px 12px; border-radius: 8px; pointer-events: none;
+            font-size: 12px; backdrop-filter: blur(8px); transform: translate(15px, 15px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        }
+        .light .tooltip { background: rgba(255, 255, 255, 0.9); border: 1px solid #e2e8f0; color: #334155; }
+        .dark .tooltip { background: rgba(15, 23, 42, 0.9); border: 1px solid #334155; color: #f8fafc; }
+
+        .cursor-pan { cursor: grab; }
+        .cursor-panning { cursor: grabbing; }
+        .cursor-draw { cursor: crosshair; }
+        .cursor-draw-wall { cursor: cell; }
+        .cursor-select { cursor: default; }
+        .cursor-visibility { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="%236366f1" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/></svg>') 10 10, auto; }
+
+        /* Custom Scrollbar for Sidebar */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        
+        /* Animations */
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .animate-pulse-soft { animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden text-slate-700 dark:text-slate-200">
+    <div class="liquid-bg"></div>
+
+    <!-- Top Bar: Project Title & Theme Toggle -->
+    <div class="absolute top-4 left-4 right-4 z-20 flex justify-between items-center pointer-events-none">
+        <!-- Title Card -->
+        <div class="glass-panel px-4 py-2 rounded-xl flex items-center gap-3 pointer-events-auto">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-glow">
+                <i class="fa fa-cubes"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm tracking-wide cursor-pointer hover:text-indigo-500 transition-colors" onclick="handleRename()" id="projectTitle">HSO Project</h1>
+                <p class="text-[10px] opacity-60 uppercase tracking-widest font-medium">Syntax & Visibility Engine</p>
+            </div>
+        </div>
+
+        <!-- Right Controls -->
+        <div class="flex gap-2 pointer-events-auto">
+            <!-- Theme Toggle -->
+            <button onclick="toggleTheme()" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center hover:bg-white/80 dark:hover:bg-slate-700 transition-all text-indigo-500 dark:text-yellow-400 text-lg shadow-sm">
+                <i id="themeIcon" class="fa fa-moon-o"></i>
+            </button>
+            
+            <!-- Actions -->
+            <div class="glass-panel p-1 rounded-xl flex gap-1">
+                 <button onclick="actions.undo()" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors" title="撤销 (Ctrl+Z)">
+                    <i class="fa fa-undo opacity-70"></i>
+                </button>
+                 <button onclick="actions.clearIsovists()" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-orange-50 dark:hover:bg-slate-700 text-orange-500 transition-colors" title="清除视域">
+                    <i class="fa fa-eye-slash"></i>
+                </button>
+                <button onclick="actions.deleteSelection()" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-red-50 dark:hover:bg-slate-700 text-red-500 transition-colors" title="删除 (Del)">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Sidebar -->
+    <div class="absolute left-4 top-20 bottom-4 w-64 z-20 flex flex-col gap-3 pointer-events-none">
+        
+        <!-- Main Tools Panel -->
+        <div class="glass-panel rounded-2xl flex-1 flex flex-col overflow-hidden pointer-events-auto">
+            <div class="p-4 space-y-5 overflow-y-auto scrollbar-hide">
+                
+                <!-- File Operations -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="relative group">
+                        <button class="w-full py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-xs font-medium shadow-md transition-all flex items-center justify-center gap-2">
+                            <i class="fa fa-folder-open"></i> 导入
+                        </button>
+                        <input type="file" accept=".zip,.json" onchange="handleImport(event)" class="absolute inset-0 opacity-0 cursor-pointer">
+                    </div>
+                    <button onclick="handleExport()" class="w-full py-2 bg-white dark:bg-slate-700 border border-indigo-100 dark:border-slate-600 hover:border-indigo-300 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 transition-all flex items-center justify-center gap-2">
+                        <i class="fa fa-download"></i> 导出
+                    </button>
+                </div>
+
+                <!-- Engine Switcher -->
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold opacity-40 uppercase tracking-widest px-1">Core Engine</label>
+                    <div class="bg-gray-100 dark:bg-slate-800/50 p-1 rounded-xl flex text-xs font-medium relative">
+                        <div id="engineHighlight" class="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-white dark:bg-slate-700 rounded-lg shadow-sm transition-all duration-300"></div>
+                        <button id="engineSyntax" onclick="setEngine('SYNTAX')" class="flex-1 py-1.5 relative z-10 text-indigo-600 dark:text-indigo-400 transition-colors">Axial</button>
+                        <button id="engineVGA" onclick="setEngine('VGA')" class="flex-1 py-1.5 relative z-10 text-gray-500 dark:text-slate-400 transition-colors">VGA</button>
+                    </div>
+                </div>
+
+                <!-- Syntax Tools -->
+                <div id="toolsSyntax" class="space-y-4">
+                    <!-- Basic Tools -->
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold opacity-40 uppercase tracking-widest px-1">Modeling</label>
+                        <button id="selectBtn" onclick="setMode('SELECT')" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all bg-indigo-50/50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-500/30">
+                            <i class="fa fa-mouse-pointer"></i> 
+                            <span class="text-xs font-medium">选择 / 编辑 (V)</span>
+                        </button>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="drawBtn" onclick="setMode('DRAW')" class="flex flex-col items-center gap-1 p-3 rounded-xl border border-transparent hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-gray-200 transition-all">
+                                <i class="fa fa-minus text-indigo-500 text-lg"></i>
+                                <span class="text-[10px]">轴线 (P)</span>
+                            </button>
+                            <button id="wallBtn" onclick="setMode('WALL')" class="flex flex-col items-center gap-1 p-3 rounded-xl border border-transparent hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-gray-200 transition-all">
+                                <i class="fa fa-square text-slate-500 dark:text-slate-400 text-lg"></i>
+                                <span class="text-[10px]">墙体 (W)</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- POIs -->
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold opacity-40 uppercase tracking-widest px-1">Functional POI</label>
+                        <button onclick="setMode('POI_ENTRANCE')" class="poi-btn w-full py-2 px-3 text-xs border border-amber-200/50 bg-amber-50/50 dark:bg-amber-900/20 dark:border-amber-700/50 text-amber-600 dark:text-amber-400 rounded-lg flex items-center gap-2 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all">
+                            <i class="fa fa-sign-in"></i> 主出入口
+                        </button>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="setMode('POI_EMERGENCY')" class="poi-btn py-2 text-xs border border-transparent bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 transition-all">🔴 急诊</button>
+                            <button onclick="setMode('POI_SURGERY')" class="poi-btn py-2 text-xs border border-transparent bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-500 transition-all">🔵 手术</button>
+                            <button onclick="setMode('POI_ICU')" class="poi-btn py-2 text-xs border border-transparent bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:text-purple-500 transition-all">🟣 ICU</button>
+                            <button onclick="setMode('POI_WARD')" class="poi-btn py-2 text-xs border border-transparent bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-500 transition-all">🟢 护士站</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VGA Tools -->
+                <div id="toolsVGA" class="space-y-3 hidden">
+                    <label class="text-[10px] font-bold opacity-40 uppercase tracking-widest px-1">Visual Analysis</label>
+                    <div class="bg-indigo-50/50 dark:bg-indigo-900/20 p-3 rounded-xl text-xs text-indigo-800 dark:text-indigo-200 leading-relaxed border border-indigo-100 dark:border-indigo-800">
+                        <i class="fa fa-lightbulb-o mb-1"></i>
+                        <span class="opacity-80 block mt-1">点击画布放置<b>视点(Observer)</b>。系统将自动计算基于当前墙体布局的360°可视范围。</span>
+                    </div>
+                    <button id="isoBtn" onclick="setMode('ISOVIST_POINT')" class="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]">
+                        <div class="absolute inset-0 bg-white/20 group-hover:bg-transparent transition-colors"></div>
+                        <div class="relative py-3 flex items-center justify-center gap-2 text-sm font-bold">
+                            <i class="fa fa-eye"></i> 放置探针
+                        </div>
+                    </button>
+                </div>
+                
+                <!-- Background Image Upload -->
+                <div class="pt-4 mt-2 border-t border-gray-200/30 dark:border-gray-700/30">
+                    <div class="relative group cursor-pointer">
+                        <div class="flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors">
+                            <i class="fa fa-image"></i> 上传底图 (DXF/PNG)
+                        </div>
+                        <input type="file" accept="image/*" onchange="handleFileUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend Card -->
+        <div class="glass-panel p-3 rounded-2xl pointer-events-auto">
+             <div class="flex justify-between items-center mb-2">
+                <span class="text-[10px] font-bold uppercase opacity-50">Integration Scale</span>
+                <span id="legendMode" class="text-[10px] bg-black/5 dark:bg-white/10 px-1.5 rounded opacity-70">Global</span>
+            </div>
+            <!-- Custom Gradient: Red -> Orange -> Yellow -> Green -> Cyan -> Blue -->
+            <div class="w-full h-1.5 rounded-full shadow-sm opacity-90" style="background: linear-gradient(to right, #ff0000 0%, #ff7f00 20%, #ffff00 40%, #00ff00 60%, #00ffff 80%, #0000ff 100%);"></div>
+            <div class="flex justify-between text-[10px] opacity-40 mt-1 font-mono">
+                <!-- Red is High Integration (Accessible), Blue is Low Integration (Segregated) -->
+                <span>High</span>
+                <span>Low</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Canvas Area -->
+    <div class="absolute inset-0 z-0 canvas-container" id="canvasContainer">
+        <canvas id="mainCanvas" class="block outline-none w-full h-full"></canvas>
+        <div id="tooltip" class="tooltip hidden">
+            <div class="font-bold border-b border-white/20 pb-1 mb-1 opacity-90" id="tooltipTitle">Info</div>
+            <div id="tooltipContent" class="opacity-80 font-mono"></div>
+        </div>
+    </div>
+    
+    <!-- Floating Bottom Metrics Panel -->
+    <div class="absolute bottom-4 left-72 right-4 h-24 pointer-events-none flex gap-4">
+         <!-- Card 1: EBD Efficiency -->
+        <div class="glass-panel flex-1 rounded-2xl p-4 flex flex-col justify-center pointer-events-auto relative overflow-hidden group">
+            <div class="absolute right-2 top-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                <i class="fa fa-heartbeat text-4xl"></i>
+            </div>
+             <div class="flex items-center gap-2 mb-1">
+                <div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                <h3 class="text-[10px] font-bold uppercase opacity-60">流程效率 (EBD)</h3>
+            </div>
+            <div class="flex items-baseline gap-2">
+                <span id="metricStep" class="text-2xl font-mono font-bold">-</span>
+                <span class="text-xs opacity-50">拓扑步数</span>
+            </div>
+            <div id="metricStepStatus" class="mt-1 text-[10px] font-medium opacity-60">急诊 → 手术</div>
+        </div>
+        
+        <!-- Card 2: VGA Area -->
+        <div class="glass-panel flex-1 rounded-2xl p-4 flex flex-col justify-center pointer-events-auto relative overflow-hidden group">
+             <div class="absolute right-2 top-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                <i class="fa fa-eye text-4xl"></i>
+            </div>
+             <div class="flex items-center gap-2 mb-1">
+                <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                <h3 class="text-[10px] font-bold uppercase opacity-60">视域面积 (VGA)</h3>
+            </div>
+            <div class="flex items-baseline gap-2">
+                <span id="metricArea" class="text-2xl font-mono font-bold text-indigo-600 dark:text-indigo-400">0</span>
+                <span class="text-xs opacity-50">px²</span>
+            </div>
+            <div class="mt-1 text-[10px] opacity-40">可视范围覆盖率</div>
+        </div>
+
+        <!-- Card 3: Synergy -->
+        <div class="glass-panel flex-1 rounded-2xl p-4 flex flex-col justify-center pointer-events-auto relative overflow-hidden">
+            <div class="flex items-center gap-2 mb-2">
+                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                <h3 class="text-[10px] font-bold uppercase opacity-60">空间协同度</h3>
+            </div>
+             <div class="w-full bg-gray-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mb-1">
+                <div id="synergyBar" class="bg-gradient-to-r from-emerald-400 to-teal-500 h-full transition-all duration-1000 ease-out shadow-glow" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between text-[10px] opacity-40 font-mono">
+                <span>0%</span>
+                <span id="synergyValue">0%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic Script -->
+    <script>
+        // --- Theme Logic ---
+        window.toggleTheme = () => {
+            const html = document.documentElement;
+            const isDark = html.classList.toggle('dark');
+            html.classList.toggle('light', !isDark);
+            
+            const icon = document.getElementById('themeIcon');
+            icon.className = isDark ? 'fa fa-sun-o' : 'fa fa-moon-o';
+            
+            App.render(); // Re-render canvas for grid colors
+        };
+
+        // --- Engines ---
+        const SyntaxEngine = {
+            getIntersection: (l1, l2) => {
+                const det = (l1.x2 - l1.x1) * (l2.y2 - l2.y1) - (l2.x2 - l2.x1) * (l1.y2 - l1.y1);
+                if (det === 0) return null;
+                const lambda = ((l2.y2 - l2.y1) * (l2.x2 - l1.x1) + (l2.x1 - l2.x2) * (l2.y2 - l1.y1)) / det;
+                const gamma = ((l1.y1 - l1.y2) * (l2.x2 - l1.x1) + (l1.x2 - l1.x1) * (l2.y2 - l1.y1)) / det;
+                return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+            },
+            
+            // Calc angle between two lines (0-90 degrees, normalized 0-1)
+            getAngleCost: (l1, l2) => {
+                // Vector 1
+                const v1x = l1.x2 - l1.x1, v1y = l1.y2 - l1.y1;
+                // Vector 2
+                const v2x = l2.x2 - l2.x1, v2y = l2.y2 - l2.y1;
+                
+                // Dot product
+                const dot = v1x*v2x + v1y*v2y;
+                const mag1 = Math.sqrt(v1x*v1x + v1y*v1y);
+                const mag2 = Math.sqrt(v2x*v2x + v2y*v2y);
+                
+                // Cos theta
+                let cosTheta = Math.abs(dot / (mag1 * mag2)); // Abs to treat opposite directions as parallel (0 angle)
+                if(cosTheta > 1) cosTheta = 1;
+                
+                // Angle in radians (0 to PI/2)
+                const angle = Math.acos(cosTheta);
+                
+                // Normalize 90 deg = 1.0 cost
+                return angle / (Math.PI / 2);
+            },
+
+            buildGraph: (lines) => {
+                const adj = new Map();
+                lines.forEach(l => adj.set(l.id, []));
+                for(let i=0; i<lines.length; i++) {
+                    for(let j=i+1; j<lines.length; j++) {
+                        if(SyntaxEngine.getIntersection(lines[i], lines[j])) {
+                            adj.get(lines[i].id).push(lines[j].id);
+                            adj.get(lines[j].id).push(lines[i].id);
+                        }
+                    }
+                }
+                return adj;
+            },
+            
+            // Standard BFS for Global Integration (No Entrances)
+            bfs: (starts, adj, maxDepth=null) => {
+                const dists = new Map();
+                const q = [];
+                const roots = Array.isArray(starts) ? starts : [starts];
+                roots.forEach(r => { if(adj.has(r)) { dists.set(r, 0); q.push({id:r, d:0}); } });
+                let totalD = 0, count = 0;
+                while(q.length) {
+                    const {id, d} = q.shift();
+                    totalD += d; count++;
+                    if(maxDepth!==null && d>=maxDepth) continue;
+                    const neighbors = adj.get(id) || [];
+                    for(const n of neighbors) {
+                        if(!dists.has(n)) { dists.set(n, d+1); q.push({id:n, d:d+1}); }
+                    }
+                }
+                return { dists, totalDepth: totalD, nodeCount: count };
+            },
+
+            // New Weighted BFS for Entrance Analysis
+            calculateWeightedAccessibility: (lines, entrancePOIs, adj) => {
+                // 1. Identify Root Lines (closest to entrances)
+                const roots = [];
+                entrancePOIs.forEach(poi => {
+                    let minD = Infinity, closestId = null;
+                    lines.forEach(l => {
+                         const cx = (l.x1+l.x2)/2, cy = (l.y1+l.y2)/2;
+                         const d = Math.hypot(poi.x-cx, poi.y-cy);
+                         if(d < minD) { minD = d; closestId = l.id; }
+                    });
+                    if(closestId) roots.push({ id: closestId, dist: minD, poi });
+                });
+
+                if(roots.length === 0) return null;
+
+                const results = {};
+                lines.forEach(l => { results[l.id] = { topo: Infinity, angle: Infinity, metric: Infinity }; });
+
+                // Multi-start BFS/Dijkstra
+                // Queue stores: { currentLineId, topoDepth, angleCost, parentLineId }
+                // We use a simplified Dijkstra where we track cumulative costs
+                
+                // Initialize roots
+                roots.forEach(r => {
+                    // Metric Distance for root is Euclidean dist to POI
+                    const cx = (lines.find(l=>l.id===r.id).x1 + lines.find(l=>l.id===r.id).x2)/2;
+                    const cy = (lines.find(l=>l.id===r.id).y1 + lines.find(l=>l.id===r.id).y2)/2;
+                    results[r.id] = { topo: 0, angle: 0, metric: r.dist }; 
+                });
+
+                // Traversal to fill Topo and Angle costs (simplification: using BFS for Topo, accumulating angles)
+                const q = roots.map(r => ({ id: r.id, topo: 0, angle: 0 }));
+                const visited = new Set(roots.map(r=>r.id));
+
+                while(q.length > 0) {
+                    const curr = q.shift();
+                    const currLine = lines.find(l => l.id === curr.id);
+                    const neighbors = adj.get(curr.id) || [];
+                    
+                    neighbors.forEach(nId => {
+                        if(!visited.has(nId)) {
+                            visited.add(nId);
+                            const nLine = lines.find(l => l.id === nId);
+                            
+                            // Calc Costs
+                            const newTopo = curr.topo + 1;
+                            const turnCost = SyntaxEngine.getAngleCost(currLine, nLine);
+                            const newAngle = curr.angle + turnCost;
+                            
+                            // Metric: Euclidean from closest Entrance POI (simplification for "Accumulated Distance")
+                            // Strictly speaking, accumulated distance means path length. 
+                            // But for efficiency, we use direct distance to source as a "Gravity" metric here.
+                            let minMetric = Infinity;
+                            roots.forEach(r => {
+                                const dist = Math.hypot(nLine.x1+nLine.x2 - 2*r.poi.x, nLine.y1+nLine.y2 - 2*r.poi.y) / 2;
+                                if(dist < minMetric) minMetric = dist;
+                            });
+                            
+                            results[nId] = { topo: newTopo, angle: newAngle, metric: minMetric };
+                            q.push({ id: nId, topo: newTopo, angle: newAngle });
+                        }
+                    });
+                }
+                
+                return results;
+            },
+
+            calculate: (lines, pois) => {
+                const adj = SyntaxEngine.buildGraph(lines);
+                const res = {};
+                
+                // Check for Entrances
+                const entrances = pois.filter(p => p.type === 'ENTRANCE');
+                
+                if (entrances.length > 0) {
+                    // --- MODE: WEIGHTED ACCESS (Scientific Formula) ---
+                    const rawData = SyntaxEngine.calculateWeightedAccessibility(lines, entrances, adj);
+                    
+                    if(rawData) {
+                        // 1. Find Min/Max for Normalization
+                        let maxTopo=0, maxAngle=0, maxMetric=0;
+                        
+                        Object.values(rawData).forEach(d => {
+                            if(d.topo !== Infinity && d.topo > maxTopo) maxTopo = d.topo;
+                            if(d.angle !== Infinity && d.angle > maxAngle) maxAngle = d.angle;
+                            if(d.metric !== Infinity && d.metric > maxMetric) maxMetric = d.metric;
+                        });
+
+                        // 2. Normalize and Apply Formula
+                        // Formula: Cost = 0.5*Dist + 0.3*Topo + 0.2*Angle
+                        // Score (Integration) = 1 - Cost (So 1 is best/closest, 0 is worst)
+                        
+                        lines.forEach(l => {
+                            const d = rawData[l.id];
+                            if(d.topo === Infinity) {
+                                res[l.id] = { val: 0, depths: new Map(), norm: 0 }; // Unreachable
+                            } else {
+                                const normTopo = maxTopo===0 ? 0 : d.topo / maxTopo;
+                                const normAngle = maxAngle===0 ? 0 : d.angle / maxAngle;
+                                const normMetric = maxMetric===0 ? 0 : d.metric / maxMetric;
+                                
+                                const cost = (0.5 * normMetric) + (0.3 * normTopo) + (0.2 * normAngle);
+                                const score = Math.max(0, 1 - cost); // Invert cost to get "Integration/Goodness"
+                                
+                                res[l.id] = { val: score, depths: new Map(), norm: score };
+                            }
+                        });
+                        
+                        // Update Legend UI
+                        const leg = document.getElementById('legendMode');
+                        if(leg) leg.innerText = "Weighted Access";
+                    }
+                    
+                } else {
+                    // --- MODE: STANDARD INTEGRATION (Global Mean Depth) ---
+                    let min=Infinity, max=-Infinity;
+                    lines.forEach(l => {
+                        const g = SyntaxEngine.bfs(l.id, adj);
+                        const meanD = g.nodeCount > 1 ? g.totalDepth/(g.nodeCount-1) : 0;
+                        const val = meanD > 0 ? 1/meanD : 0;
+                        if(val > max) max = val;
+                        if(val < min) min = val;
+                        res[l.id] = { val, depths: g.dists };
+                    });
+                    const range = max - min;
+                    lines.forEach(l => { res[l.id].norm = range===0 ? 0.5 : (res[l.id].val - min)/range; });
+                    
+                    const leg = document.getElementById('legendMode');
+                    if(leg) leg.innerText = "Global Integration";
+                }
+                
+                return res;
+            }
+        };
+
+        const VisibilityEngine = {
+            getRayIntersection: (rayOrigin, rayDir, segment) => {
+                const r_px = rayOrigin.x, r_py = rayOrigin.y;
+                const r_dx = rayDir.x, r_dy = rayDir.y;
+                const s_px = segment.x1, s_py = segment.y1;
+                const s_dx = segment.x2 - segment.x1, s_dy = segment.y2 - segment.y1;
+                const r_mag = Math.sqrt(r_dx*r_dx + r_dy*r_dy);
+                const s_mag = Math.sqrt(s_dx*s_dx + s_dy*s_dy);
+                if(r_dx/r_mag === s_dx/s_mag && r_dy/r_mag === s_dy/s_mag) return null;
+                const T2 = (r_dx*(s_py-r_py) + r_dy*(r_px-s_px))/(s_dx*r_dy - s_dy*r_dx);
+                const T1 = (s_px+s_dx*T2-r_px)/r_dx;
+                if(T1 > 0 && T2 >= 0 && T2 <= 1) return { x: s_px+s_dx*T2, y: s_py+s_dy*T2, dist: T1 };
+                return null;
+            },
+            computePolygon: (origin, obstacles, numRays = 360) => {
+                const points = [];
+                const maxDist = 3000;
+                for(let i=0; i<numRays; i++) {
+                    const angle = (i / numRays) * Math.PI * 2;
+                    const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+                    let closest = { x: origin.x + dir.x * maxDist, y: origin.y + dir.y * maxDist, dist: maxDist };
+                    for(const wall of obstacles) {
+                        const hit = VisibilityEngine.getRayIntersection(origin, dir, wall);
+                        if(hit && hit.dist < closest.dist) closest = hit;
+                    }
+                    points.push(closest);
+                }
+                let area = 0;
+                for (let i = 0; i < points.length; i++) {
+                    const j = (i + 1) % points.length;
+                    area += points[i].x * points[j].y;
+                    area -= points[j].x * points[i].y;
+                }
+                return { points, area: Math.abs(area) / 2 };
+            }
+        };
+
+        // --- State ---
+        const state = {
+            project: "HSO_Glass_Project",
+            lines: [
+                { id: 'l1', x1: 100, y1: 100, x2: 100, y2: 600 },
+                { id: 'l2', x1: 100, y1: 100, x2: 800, y2: 100 },
+                { id: 'l3', x1: 800, y1: 100, x2: 800, y2: 600 },
+                { id: 'l4', x1: 100, y1: 600, x2: 800, y2: 600 },
+                { id: 'l5', x1: 450, y1: 100, x2: 450, y2: 500 }
+            ],
+            obstacles: [
+                { id: 'w1', x1: 80, y1: 80, x2: 80, y2: 620 },
+                { id: 'w2', x1: 80, y1: 80, x2: 820, y2: 80 },
+                { id: 'w3', x1: 820, y1: 80, x2: 820, y2: 620 },
+                { id: 'w4', x1: 80, y1: 620, x2: 820, y2: 620 },
+                { id: 'w5', x1: 440, y1: 80, x2: 440, y2: 520 }
+            ],
+            pois: [],
+            isovists: [],
+            history: [],
+            engineMode: 'SYNTAX',
+            mode: 'SELECT',
+            camera: { x: 50, y: 50, zoom: 0.8 },
+            selection: [],
+            hover: null,
+            drag: null,
+            boxSelect: null,
+            syntaxResults: {},
+            bgImage: null
+        };
+
+        // --- App ---
+        const App = {
+            init: () => {
+                state.canvas = document.getElementById('mainCanvas');
+                state.ctx = state.canvas.getContext('2d');
+                App.resize();
+                App.bindEvents();
+                App.pushHistory();
+                App.recalculate();
+                App.render();
+            },
+            resize: () => {
+                const p = document.getElementById('canvasContainer');
+                state.canvas.width = p.clientWidth;
+                state.canvas.height = p.clientHeight;
+                App.render();
+            },
+            pushHistory: () => {
+                if(state.history.length > 20) state.history.shift();
+                state.history.push(JSON.stringify({
+                    lines: state.lines, obstacles: state.obstacles, pois: state.pois, isovists: state.isovists
+                }));
+            },
+            recalculate: () => {
+                state.syntaxResults = SyntaxEngine.calculate(state.lines, state.pois);
+                state.isovists.forEach(iso => {
+                    const res = VisibilityEngine.computePolygon({x: iso.x, y: iso.y}, state.obstacles);
+                    iso.points = res.points; iso.area = res.area;
+                });
+                App.updateUI();
+                App.diagnose();
+            },
+            diagnose: () => {
+                // EBD & Synergy
+                const emg = state.pois.find(p => p.type === 'EMERGENCY');
+                const sur = state.pois.find(p => p.type === 'SURGERY');
+                let stepStr = "-";
+                if(emg && sur) {
+                    const findL = (p) => {
+                        let min=Infinity, id=null;
+                        state.lines.forEach(l => {
+                            const d = Math.hypot(p.x-(l.x1+l.x2)/2, p.y-(l.y1+l.y2)/2);
+                            if(d<min) { min=d; id=l.id; }
+                        });
+                        return id;
+                    };
+                    const id1 = findL(emg), id2 = findL(sur);
+                    if(id1 && id2 && state.syntaxResults[id1]) {
+                        const depths = state.syntaxResults[id1].depths;
+                        const d = depths ? depths.get(id2) : undefined;
+                        stepStr = d !== undefined ? d : "∞";
+                        const el = document.getElementById('metricStepStatus');
+                        if(d <= 3) { el.innerHTML = "Excellent (Direct)"; el.className="mt-1 text-[10px] text-emerald-500 font-bold"; }
+                        else { el.innerHTML = "Inefficient (Deep)"; el.className="mt-1 text-[10px] text-amber-500 font-bold"; }
+                    }
+                }
+                document.getElementById('metricStep').innerText = stepStr;
+                
+                const vals = Object.values(state.syntaxResults).map(r => r.val);
+                const synergy = vals.length > 0 ? (vals.filter(v=>v>0.8).length / vals.length) * 100 : 0;
+                document.getElementById('synergyBar').style.width = `${Math.min(100, synergy * 2)}%`;
+                document.getElementById('synergyValue').innerText = Math.round(synergy * 2) + "%";
+
+                const activeIso = state.isovists.find(i => state.selection.includes(i.id));
+                document.getElementById('metricArea').innerText = activeIso ? Math.round(activeIso.area).toLocaleString() : (state.isovists.length>0?"Select Eye":"0");
+            },
+            render: () => {
+                const ctx = state.ctx;
+                const { camera, lines, obstacles, pois, isovists } = state;
+                const zoom = camera.zoom;
+                const isDark = document.documentElement.classList.contains('dark');
+
+                ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
+                ctx.save();
+                ctx.translate(camera.x, camera.y);
+                ctx.scale(zoom, zoom);
+
+                // Background
+                if(state.bgImage) ctx.drawImage(state.bgImage, 0, 0);
+                else App.drawGrid(ctx, isDark);
+
+                // Isovist Layer
+                isovists.forEach(iso => {
+                    const isSel = state.selection.includes(iso.id);
+                    if(!iso.points) return;
+                    ctx.beginPath();
+                    ctx.moveTo(iso.points[0].x, iso.points[0].y);
+                    iso.points.forEach(p => ctx.lineTo(p.x, p.y));
+                    ctx.closePath();
+                    
+                    const grad = ctx.createRadialGradient(iso.x, iso.y, 10, iso.x, iso.y, 500);
+                    if(isSel) {
+                        grad.addColorStop(0, "rgba(99, 102, 241, 0.6)");
+                        grad.addColorStop(1, "rgba(99, 102, 241, 0.05)");
+                    } else {
+                        grad.addColorStop(0, "rgba(245, 158, 11, 0.3)");
+                        grad.addColorStop(1, "rgba(245, 158, 11, 0.02)");
+                    }
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                    ctx.strokeStyle = isSel ? "rgba(99, 102, 241, 0.6)" : "rgba(245, 158, 11, 0.2)";
+                    ctx.lineWidth = 1/zoom;
+                    ctx.stroke();
+                });
+
+                // Obstacles
+                const wallAlpha = state.engineMode === 'VGA' ? (isDark ? 0.9 : 0.8) : 0.2;
+                obstacles.forEach(w => {
+                    const isSel = state.selection.includes(w.id);
+                    ctx.beginPath();
+                    ctx.moveTo(w.x1, w.y1); ctx.lineTo(w.x2, w.y2);
+                    ctx.lineCap = 'square';
+                    ctx.strokeStyle = isSel ? (isDark?'#fff':'#000') : (isDark?`rgba(255,255,255,${wallAlpha})`:`rgba(15,23,42,${wallAlpha})`);
+                    ctx.lineWidth = (isSel ? 6 : 4) / zoom;
+                    ctx.stroke();
+                    if(isSel && state.mode === 'SELECT') {
+                         App.drawHandle(w.x1, w.y1, '#6366f1'); App.drawHandle(w.x2, w.y2, '#6366f1');
+                    }
+                });
+
+                // Syntax Lines
+                const lineAlpha = state.engineMode === 'VGA' ? 0.1 : 1.0;
+                lines.forEach(l => {
+                    const res = state.syntaxResults[l.id];
+                    const isSel = state.selection.includes(l.id);
+                    ctx.beginPath();
+                    ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2);
+                    ctx.lineCap = 'round';
+                    if(res) {
+                        const hue = (1 - res.norm) * 240; // Blue to Red (Syntax Standard)
+                        // In dark mode, increase lightness
+                        const light = isDark ? 60 : 50;
+                        ctx.strokeStyle = `hsla(${hue}, 85%, ${light}%, ${lineAlpha})`;
+                    } else {
+                        ctx.strokeStyle = isDark ? '#475569' : '#cbd5e1';
+                    }
+                    ctx.lineWidth = (isSel ? 8 : 4) / zoom;
+                    ctx.stroke();
+                    if(isSel && state.mode === 'SELECT') {
+                        App.drawHandle(l.x1, l.y1, '#6366f1'); App.drawHandle(l.x2, l.y2, '#6366f1');
+                    }
+                });
+
+                // POIs
+                pois.forEach(p => App.drawPOI(p, isDark));
+                isovists.forEach(iso => {
+                    const isSel = state.selection.includes(iso.id);
+                    ctx.beginPath();
+                    ctx.arc(iso.x, iso.y, 8/zoom, 0, Math.PI*2);
+                    ctx.fillStyle = isSel ? '#6366f1' : (isDark?'#1e293b':'#fff');
+                    ctx.strokeStyle = '#6366f1';
+                    ctx.lineWidth = 2/zoom;
+                    ctx.fill(); ctx.stroke();
+                    // Eye Pupil
+                    ctx.beginPath();
+                    ctx.arc(iso.x, iso.y, 3/zoom, 0, Math.PI*2);
+                    ctx.fillStyle = isSel ? '#fff' : '#6366f1';
+                    ctx.fill();
+                });
+
+                // Box Select
+                if(state.boxSelect) {
+                    const b = state.boxSelect;
+                    ctx.fillStyle = "rgba(99, 102, 241, 0.1)";
+                    ctx.strokeStyle = "#6366f1";
+                    ctx.lineWidth = 1/zoom;
+                    ctx.fillRect(b.x, b.y, b.w, b.h);
+                    ctx.strokeRect(b.x, b.y, b.w, b.h);
+                }
+
+                // Current Draw
+                if(state.drag && (state.drag.type === 'DRAW_LINE' || state.drag.type === 'DRAW_WALL')) {
+                    const d = state.drag;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x1, d.y1); ctx.lineTo(d.currX, d.currY);
+                    ctx.strokeStyle = state.drag.type === 'DRAW_WALL' ? (isDark?'#94a3b8':'#334155') : '#6366f1';
+                    ctx.lineWidth = 2/zoom;
+                    ctx.setLineDash([5/zoom, 5/zoom]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                ctx.restore();
+                requestAnimationFrame(App.render);
+            },
+            drawPOI: (p, isDark) => {
+                const z = state.camera.zoom;
+                const isSel = state.selection.includes(p.id);
+                state.ctx.beginPath();
+                state.ctx.arc(p.x, p.y, (isSel?10:7)/z, 0, Math.PI*2);
+                let col = '#94a3b8';
+                if(p.type.includes('EMERGENCY')) col = '#ef4444';
+                if(p.type.includes('SURGERY')) col = '#3b82f6';
+                if(p.type.includes('ICU')) col = '#a855f7';
+                if(p.type.includes('WARD')) col = '#10b981';
+                if(p.type.includes('ENTRANCE')) col = '#d97706';
+                state.ctx.fillStyle = col;
+                state.ctx.fill();
+                state.ctx.strokeStyle = isSel ? (isDark?'#fff':'#1e293b') : (isDark?'#0f172a':'#fff');
+                state.ctx.lineWidth = 2/z;
+                state.ctx.stroke();
+            },
+            drawHandle: (x, y, color) => {
+                const s = 6/state.camera.zoom;
+                state.ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff';
+                state.ctx.strokeStyle = color;
+                state.ctx.lineWidth = 2/state.camera.zoom;
+                state.ctx.strokeRect(x-s/2, y-s/2, s, s);
+                state.ctx.fillRect(x-s/2, y-s/2, s, s);
+            },
+            drawGrid: (ctx, isDark) => {
+                const z = state.camera.zoom;
+                const step = 100;
+                const left = -state.camera.x / z, top = -state.camera.y / z;
+                const right = left + state.canvas.width/z, bottom = top + state.canvas.height/z;
+                ctx.beginPath();
+                ctx.strokeStyle = isDark ? '#334155' : '#e2e8f0';
+                ctx.lineWidth = 1/z;
+                // Use slightly transparent lines for glass feel
+                ctx.globalAlpha = 0.5;
+                for(let x=Math.floor(left/step)*step; x<right; x+=step) { ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
+                for(let y=Math.floor(top/step)*step; y<bottom; y+=step) { ctx.moveTo(left, y); ctx.lineTo(right, y); }
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            },
+            getEventPos: (e) => {
+                const r = state.canvas.getBoundingClientRect();
+                return { x: e.clientX - r.left, y: e.clientY - r.top };
+            },
+            screenToWorld: (sx, sy) => ({ x: (sx - state.camera.x) / state.camera.zoom, y: (sy - state.camera.y) / state.camera.zoom }),
+            hitTest: (pos) => {
+                const dist = 10 / state.camera.zoom;
+                for(let p of state.pois) if(Math.hypot(p.x-pos.x, p.y-pos.y) < dist) return p;
+                for(let iso of state.isovists) if(Math.hypot(iso.x-pos.x, iso.y-pos.y) < dist) return iso;
+                const checkSeg = (arr) => {
+                    for(let l of arr) {
+                        const A=pos.x-l.x1, B=pos.y-l.y1, C=l.x2-l.x1, D=l.y2-l.y1;
+                        const dot = A*C+B*D, len_sq = C*C+D*D;
+                        let param = -1;
+                        if(len_sq!=0) param = dot/len_sq;
+                        let xx, yy;
+                        if(param<0) { xx=l.x1; yy=l.y1; }
+                        else if(param>1) { xx=l.x2; yy=l.y2; }
+                        else { xx=l.x1+param*C; yy=l.y1+param*D; }
+                        if(Math.hypot(pos.x-xx, pos.y-yy) < dist) return l;
+                    }
+                    return null;
+                };
+                const hitWall = checkSeg(state.obstacles); if(hitWall) return hitWall;
+                const hitLine = checkSeg(state.lines); if(hitLine) return {...hitLine, ...state.syntaxResults[hitLine.id]};
+                return null;
+            },
+            updateUI: () => {
+                const isSyntax = state.engineMode === 'SYNTAX';
+                document.getElementById('toolsSyntax').classList.toggle('hidden', !isSyntax);
+                document.getElementById('toolsVGA').classList.toggle('hidden', isSyntax);
+                
+                const hl = document.getElementById('engineHighlight');
+                hl.style.left = isSyntax ? '4px' : 'calc(50%)';
+                
+                // Cursor logic
+                const c = state.canvas;
+                c.className = 'block outline-none w-full h-full';
+                if(state.mode==='DRAW') c.classList.add('cursor-draw');
+                else if(state.mode==='WALL') c.classList.add('cursor-draw-wall');
+                else if(state.mode==='ISOVIST_POINT') c.classList.add('cursor-visibility');
+                else if(state.mode==='SELECT') c.classList.add('cursor-select');
+                
+                // Button Active States
+                const map = { 'SELECT': 'selectBtn', 'DRAW': 'drawBtn', 'WALL': 'wallBtn' };
+                Object.keys(map).forEach(k => {
+                    const el = document.getElementById(map[k]);
+                    if(!el) return;
+                    if(state.mode === k) {
+                        el.classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-50', 'dark:bg-slate-700');
+                        el.classList.remove('border-transparent');
+                    } else {
+                        el.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-50', 'dark:bg-slate-700');
+                        el.classList.add('border-transparent');
+                    }
+                });
+            },
+            bindEvents: () => {
+                const c = state.canvas;
+                window.addEventListener('resize', App.resize);
+                window.addEventListener('keydown', e => {
+                    if(e.key === 'Delete' || e.key === 'Backspace') actions.deleteSelection();
+                    if((e.ctrlKey || e.metaKey) && e.key === 'z') actions.undo();
+                    if(e.key === 'v' || e.key === 'V') setMode('SELECT');
+                    if(e.key === 'p' || e.key === 'P') setMode('DRAW');
+                    if(e.key === 'w' || e.key === 'W') setMode('WALL');
+                });
+                c.addEventListener('mousedown', e => {
+                    e.preventDefault();
+                    const pt = App.getEventPos(e);
+                    const world = App.screenToWorld(pt.x, pt.y);
+                    if(e.button === 1 || (e.button === 0 && e.code === 'Space')) {
+                        state.drag = { type: 'PAN', startX: pt.x, startY: pt.y, camX: state.camera.x, camY: state.camera.y };
+                        c.classList.add('cursor-panning');
+                        return;
+                    }
+                    if(state.mode === 'DRAW') { state.drag = { type: 'DRAW_LINE', x1: world.x, y1: world.y, currX: world.x, currY: world.y }; return; }
+                    if(state.mode === 'WALL') { state.drag = { type: 'DRAW_WALL', x1: world.x, y1: world.y, currX: world.x, currY: world.y }; return; }
+                    if(state.mode === 'ISOVIST_POINT') {
+                        const newIso = { id: `iso_${Date.now()}`, x: world.x, y: world.y };
+                        const poly = VisibilityEngine.computePolygon(newIso, state.obstacles);
+                        newIso.points = poly.points; newIso.area = poly.area;
+                        state.isovists.push(newIso); state.selection = [newIso.id];
+                        App.pushHistory(); App.diagnose(); return;
+                    }
+                    if(state.mode.startsWith('POI_')) {
+                        state.pois.push({ id: `poi_${Date.now()}`, type: state.mode.replace('POI_', ''), x: world.x, y: world.y });
+                        state.mode = 'SELECT'; App.updateUI(); App.pushHistory(); App.recalculate(); return;
+                    }
+                    const hit = App.hitTest(world);
+                    if(hit) {
+                        if(e.shiftKey) { state.selection.includes(hit.id) ? state.selection=state.selection.filter(id=>id!==hit.id) : state.selection.push(hit.id); }
+                        else { if(!state.selection.includes(hit.id)) state.selection = [hit.id]; }
+                        state.drag = { type: 'MOVE', startX: world.x, startY: world.y };
+                    } else {
+                        state.boxSelect = { x: world.x, y: world.y, w: 0, h: 0 };
+                        if(!e.shiftKey) state.selection = [];
+                    }
+                    App.diagnose();
+                });
+                window.addEventListener('mousemove', e => {
+                    const pt = App.getEventPos(e);
+                    const world = App.screenToWorld(pt.x, pt.y);
+                    if(!state.drag && !state.boxSelect) {
+                        const hit = App.hitTest(world);
+                        const tp = document.getElementById('tooltip');
+                        if(hit) {
+                            tp.classList.remove('hidden'); tp.style.left = (pt.x + 20) + 'px'; tp.style.top = (pt.y + 20) + 'px';
+                            let content = "", title = "";
+                            if(hit.val !== undefined) { title="Axial"; content=`Int: ${hit.val.toFixed(2)}`; }
+                            else if(hit.points) { title="VGA"; content=`Area: ${Math.round(hit.area)}`; }
+                            else if(state.obstacles.includes(hit)) { title="Wall"; content="Obstacle"; }
+                            else { title="POI"; content=hit.type; }
+                            document.getElementById('tooltipTitle').innerText = title; document.getElementById('tooltipContent').innerText = content;
+                        } else tp.classList.add('hidden');
+                    }
+                    if(state.boxSelect) { state.boxSelect.w = world.x - state.boxSelect.x; state.boxSelect.h = world.y - state.boxSelect.y; return; }
+                    if(!state.drag) return;
+                    if(state.drag.type === 'PAN') { state.camera.x = state.drag.camX + (pt.x - state.drag.startX); state.camera.y = state.drag.camY + (pt.y - state.drag.startY); }
+                    else if(state.drag.type === 'DRAW_LINE' || state.drag.type === 'DRAW_WALL') { state.drag.currX = world.x; state.drag.currY = world.y; }
+                    else if(state.drag.type === 'MOVE') {
+                        const dx = world.x - state.drag.startX; const dy = world.y - state.drag.startY;
+                        state.selection.forEach(id => {
+                            let item = state.lines.find(i=>i.id===id) || state.obstacles.find(i=>i.id===id) || state.pois.find(i=>i.id===id);
+                            if(item) { 
+                                if(item.x1!==undefined) { item.x1+=dx; item.y1+=dy; item.x2+=dx; item.y2+=dy; }
+                                else { item.x+=dx; item.y+=dy; }
+                            }
+                            item = state.isovists.find(i=>i.id===id);
+                            if(item) { item.x+=dx; item.y+=dy; const p=VisibilityEngine.computePolygon(item, state.obstacles); item.points=p.points; item.area=p.area; }
+                        });
+                        state.drag.startX = world.x; state.drag.startY = world.y;
+                        if(state.selection.some(id=>state.lines.find(l=>l.id===id))) App.recalculate();
+                        if(state.selection.some(id=>state.pois.find(p=>p.id===id && p.type==='ENTRANCE'))) App.recalculate(); // Recalc if Entrance moves
+                    }
+                });
+                window.addEventListener('mouseup', e => {
+                    if(state.boxSelect) {
+                        const b = state.boxSelect;
+                        const x = Math.min(b.x, b.x+b.w), y = Math.min(b.y, b.y+b.h), w = Math.abs(b.w), h = Math.abs(b.h);
+                        [...state.lines, ...state.obstacles].forEach(l => { const mx=(l.x1+l.x2)/2, my=(l.y1+l.y2)/2; if(mx>=x && mx<=x+w && my>=y && my<=y+h) state.selection.push(l.id); });
+                        [...state.pois, ...state.isovists].forEach(p => { if(p.x>=x && p.x<=x+w && p.y>=y && p.y<=y+h) state.selection.push(p.id); });
+                        state.boxSelect = null;
+                    }
+                    if(state.drag) {
+                        if(state.drag.type === 'DRAW_LINE') {
+                             if(Math.hypot(state.drag.currX-state.drag.x1, state.drag.currY-state.drag.y1)>10) {
+                                 state.lines.push({id:`l_${Date.now()}`, x1:state.drag.x1, y1:state.drag.y1, x2:state.drag.currX, y2:state.drag.currY});
+                                 App.pushHistory(); App.recalculate();
+                             }
+                        } else if(state.drag.type === 'DRAW_WALL') {
+                            if(Math.hypot(state.drag.currX-state.drag.x1, state.drag.currY-state.drag.y1)>10) {
+                                state.obstacles.push({id:`w_${Date.now()}`, x1:state.drag.x1, y1:state.drag.y1, x2:state.drag.currX, y2:state.drag.currY});
+                                App.pushHistory(); App.recalculate();
+                            }
+                        } else if(state.drag.type === 'MOVE') App.pushHistory();
+                    }
+                    state.drag = null; c.classList.remove('cursor-panning');
+                });
+                c.addEventListener('wheel', e => { e.preventDefault(); const zs = 0.001, delta = -e.deltaY*zs, pt = App.getEventPos(e), world = App.screenToWorld(pt.x, pt.y); let nz = state.camera.zoom*(delta>0?1.1:0.9); nz=Math.max(0.1, Math.min(5, nz)); state.camera.x=pt.x-world.x*nz; state.camera.y=pt.y-world.y*nz; state.camera.zoom=nz; }, {passive:false});
+            }
+        };
+
+        // --- Global Functions ---
+        window.setEngine = (m) => { state.engineMode = m; state.mode = 'SELECT'; App.updateUI(); App.render(); };
+        window.setMode = (m) => { state.mode = m; App.updateUI(); };
+        window.actions = {
+            clearIsovists: () => { state.isovists = []; App.diagnose(); },
+            deleteSelection: () => {
+                if(!state.selection.length) return;
+                state.lines = state.lines.filter(l => !state.selection.includes(l.id));
+                state.obstacles = state.obstacles.filter(l => !state.selection.includes(l.id));
+                state.pois = state.pois.filter(p => !state.selection.includes(p.id));
+                state.isovists = state.isovists.filter(i => !state.selection.includes(i.id));
+                state.selection = []; App.pushHistory(); App.recalculate();
+            },
+            undo: () => {
+                if(state.history.length > 1) {
+                    state.history.pop(); const prev = JSON.parse(state.history[state.history.length-1]);
+                    state.lines = prev.lines; state.obstacles = prev.obstacles; state.pois = prev.pois; state.isovists = prev.isovists;
+                    state.selection = []; App.recalculate();
+                }
+            }
+        };
+        window.handleRename = () => { const n = prompt("Project Name:", state.project); if(n) { state.project = n; document.getElementById('projectTitle').innerText = n; }};
+        window.handleFileUpload = (e) => {
+            const f = e.target.files[0]; if(!f) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => { const img = new Image(); img.onload=()=>{state.bgImage=img; App.render();}; img.src=evt.target.result; };
+            reader.readAsDataURL(f);
+        };
+        window.handleExport = () => {
+             const zip = new JSZip();
+             const data = { meta: { version: "3.5", app: "HSO_Glass" }, lines: state.lines, obstacles: state.obstacles, pois: state.pois, isovists: state.isovists };
+             zip.file("project.json", JSON.stringify(data));
+             if(state.bgImage && state.bgImage.src.startsWith('data:')) {
+                 zip.file("bg.png", state.bgImage.src.split(',')[1], {base64:true});
+             }
+             zip.generateAsync({type:"blob"}).then(c => saveAs(c, state.project+".zip"));
+        };
+        window.handleImport = async (e) => {
+            const f = e.target.files[0]; if(!f) return;
+            try {
+                if(f.name.endsWith('.zip')) {
+                    const zip = await JSZip.loadAsync(f);
+                    const jsonStr = await zip.file("project.json").async("string");
+                    const data = JSON.parse(jsonStr);
+                    state.lines = data.lines || []; state.obstacles = data.obstacles || []; state.pois = data.pois || []; state.isovists = data.isovists || [];
+                    const bgFile = zip.file("bg.png");
+                    if(bgFile) {
+                        const bgB64 = await bgFile.async("base64");
+                        const img = new Image();
+                        img.onload = () => { state.bgImage = img; App.recalculate(); };
+                        img.src = "data:image/png;base64," + bgB64;
+                    } else {
+                        state.bgImage = null; App.recalculate();
+                    }
+                } else if(f.name.endsWith('.json')) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                         const data = JSON.parse(evt.target.result);
+                         state.lines = data.lines || []; state.obstacles = data.obstacles || []; state.pois = data.pois || []; state.isovists = data.isovists || [];
+                         App.recalculate();
+                    };
+                    reader.readAsText(f);
+                }
+            } catch(err) { alert("Invalid Project File"); console.error(err); }
+        };
+
+        window.onload = App.init;
+    </script>
+</body>
+</html>
